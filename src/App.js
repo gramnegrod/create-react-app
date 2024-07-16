@@ -1,152 +1,133 @@
 
 
-  const humanX = flightStage === 'attached' ? 200 + Math.sin(rotation * Math.PI / 180) * 125 : humanPosition.x;
-  const humanY = flightStage === 'attached' ? 155 - Math.cos(rotation * Math.PI / 180) * 125 : humanPosition.y;
+import React, { useState, useEffect, useRef } from 'react';
 
-  const maleBody = "M-5,15 Q0,20 5,15 L5,40 Q0,45 -5,40 Z";
-  const femaleBody = "M-5,15 Q0,20 5,15 L7,40 Q0,50 -7,40 Z";
-  const maleHair = "M-6,-16 Q0,-20 6,-16 L6,-10 L-6,-10 Z";
-  const femaleHair = "M-8,-18 Q0,-22 8,-18 Q10,-10 8,-5 L-8,-5 Q-10,-10 -8,-18 Z";
+function App() {
+  const [rotation, setRotation] = useState(0);
+  const [rpm, setRpm] = useState(0);
+  const [humanStrength, setHumanStrength] = useState(705);
+  const [humanWeightLbs, setHumanWeightLbs] = useState(154);
+  const [flightStage, setFlightStage] = useState('attached');
+  const [humanPosition, setHumanPosition] = useState({ x: 0, y: 0 });
+  const bladeLength = 65;
+  const highForceStartTimeRef = useRef(null);
+  const animationFrameRef = useRef(null);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setRotation(prevRotation => (prevRotation + (rpm / 60)) % 360);
+    }, 1000 / 60);
+    return () => clearInterval(interval);
+  }, [rpm]);
+
+  useEffect(() => {
+    const checkFallCondition = () => {
+      const force = parseFloat(calculateCentripetalForce());
+      console.log(`Current force: ${force}, Human strength: ${humanStrength}`);
+      
+      if (force > humanStrength) {
+        console.log("Force is too high");
+        if (highForceStartTimeRef.current === null) {
+          console.log("Starting high force timer");
+          highForceStartTimeRef.current = Date.now();
+        } else {
+          const elapsedTime = Date.now() - highForceStartTimeRef.current;
+          console.log(`High force duration: ${elapsedTime}ms`);
+          if (elapsedTime >= 4000 && flightStage === 'attached') {
+            console.log("4 seconds passed, initiating fall");
+            setFlightStage('falling');
+            animateFall();
+            highForceStartTimeRef.current = null;
+          }
+        }
+      } else {
+        if (highForceStartTimeRef.current !== null) {
+          console.log("Force is no longer too high, resetting timer");
+          highForceStartTimeRef.current = null;
+        }
+      }
+
+      animationFrameRef.current = requestAnimationFrame(checkFallCondition);
+    };
+
+    checkFallCondition();
+
+    return () => {
+      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+    };
+  }, [rpm, humanStrength, humanWeightLbs, flightStage]);
+
+  const calculateCentripetalForce = () => {
+    const angularVelocity = (rpm * 2 * Math.PI) / 60;
+    const humanWeightKg = humanWeightLbs / 2.20462;
+    return (humanWeightKg * Math.pow(angularVelocity, 2) * bladeLength).toFixed(2);
+  };
+
+  const animateFall = () => {
+    console.log("animateFall function called");
+    const startY = 155 - Math.cos(rotation * Math.PI / 180) * 125;
+    const startX = 200 + Math.sin(rotation * Math.PI / 180) * 125;
+    let t = 0;
+    const g = 9.81;
+
+    const animate = () => {
+      t += 0.016;
+      const y = startY + 0.5 * g * t * t;
+
+      console.log(`Falling: x=${startX}, y=${y}`);
+
+      if (y < 390) {
+        setHumanPosition({ x: startX, y });
+        animationFrameRef.current = requestAnimationFrame(animate);
+      } else {
+        console.log("Human has landed");
+        setFlightStage('landed');
+        setHumanPosition({ x: startX, y: 390 });
+        setTimeout(() => {
+          setFlightStage('attached');
+        }, 3000);
+      }
+    };
+
+    animate();
+  };
+
+  const handleRpmChange = (e) => {
+    setRpm(Math.min(500, Math.max(0, parseInt(e.target.value) || 0)));
+  };
 
   return (
-    <div className="flex flex-col items-center space-y-4 p-4">
-      <svg viewBox="0 0 400 400" className="w-full h-full max-w-md">
-        <rect x="0" y="0" width="400" height="300" fill="#87CEEB" />
-        <rect x="0" y="300" width="400" height="100" fill="#8B4513" />
-        <rect x="190" y="150" width="20" height="200" fill="#A9A9A9" />
-        <g transform={`rotate(${rotation}, 200, 155)`}>
-          {[0, 120, 240].map((angle) => (
-            <rect
-              key={angle}
-              x="197"
-              y="30"
-              width="6"
-              height="125"
-              fill={isForceTooHigh() ? "#FF0000" : "#F8F8FF"}
-              transform={`rotate(${angle}, 200, 155)`}
-            />
-          ))}
-        </g>
-        {flightStage !== 'landed' && (
-          <g transform={`translate(${humanX}, ${humanY}) rotate(${flightStage === 'attached' ? rotation + 180 : 0})`}>
-            <path d={gender === 'male' ? maleBody : femaleBody} fill={gender === 'male' ? "#1E90FF" : "#FF69B4"} />
-            <circle cx="0" cy="-10" r="8" fill="#FFE4B5" />
-            <path d={gender === 'male' ? maleHair : femaleHair} fill="#8B4513" />
-            <line x1="-5" y1="5" x2="-5" y2="-15" stroke="#FFE4B5" strokeWidth="3" />
-            <line x1="5" y1="5" x2="5" y2="-15" stroke="#FFE4B5" strokeWidth="3" />
-            <line x1="-3" y1="40" x2="-3" y2="55" stroke="#FFE4B5" strokeWidth="3" />
-            <line x1="3" y1="40" x2="3" y2="55" stroke="#FFE4B5" strokeWidth="3" />
-          </g>
-        )}
-        {flightStage === 'landed' && (
-          <circle cx={humanX} cy={humanY} r={dustCloudSize} fill="#CCCCCC" opacity="0.7" />
-        )}
-      </svg>
-
-      <div className="w-full max-w-md grid grid-cols-2 gap-4">
-        <div>
-          <label htmlFor="rpm-input" className="block text-sm font-medium text-gray-700 mb-1">
-            RPM (0-500):
-          </label>
-          <input
-            id="rpm-input"
-            type="number"
-            value={rpm}
-            onChange={handleInputChange(setRpm, 0, 500)}
-            min="0"
-            max="500"
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
-          />
-        </div>
-        <div>
-          <label htmlFor="gender-select" className="block text-sm font-medium text-gray-700 mb-1">
-            Gender:
-          </label>
-          <select
-            id="gender-select"
-            value={gender}
-            onChange={(e) => setGender(e.target.value)}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
-          >
-            <option value="male">Male</option>
-            <option value="female">Female</option>
-          </select>
-        </div>
-        <div>
-          <label htmlFor="strength-input" className="block text-sm font-medium text-gray-700 mb-1">
-            Human Strength (N):
-          </label>
-          <input
-            id="strength-input"
-            type="number"
-            value={humanStrength}
-            onChange={handleInputChange(setHumanStrength, 1, 10000)}
-            min="1"
-            max="10000"
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
-          />
-        </div>
-        <div>
-          <label htmlFor="weight-input" className="block text-sm font-medium text-gray-700 mb-1">
-            Human Weight (lbs):
-          </label>
-          <input
-            id="weight-input"
-            type="number"
-            value={humanWeightLbs}
-            onChange={handleInputChange(setHumanWeightLbs, 1, 1000)}
-            min="1"
-            max="1000"
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
-          />
-        </div>
+    <div className="App">
+      <h1>Wind Turbine Simulation</h1>
+      <div>
+        <label>
+          RPM (0-500):
+          <input type="number" value={rpm} onChange={handleRpmChange} min="0" max="500" />
+        </label>
       </div>
-
-      <div className="w-full max-w-md bg-white shadow overflow-hidden rounded-lg">
-        <div className="px-4 py-5 sm:px-6">
-          <h3 className="text-lg leading-6 font-medium text-gray-900">Wind Turbine Statistics</h3>
-        </div>
-        <div className="border-t border-gray-200">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Metric</th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Value</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              <tr>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">Blade Length</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{bladeLength} meters</td>
-              </tr>
-              <tr>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">RPM</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{rpm}</td>
-              </tr>
-              <tr>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">RPM Context</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{getRpmContext()}</td>
-              </tr>
-              <tr>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">Tip Speed</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{calculateTipSpeed()} mph</td>
-              </tr>
-              <tr>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">Centripetal Force</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{calculateCentripetalForce()} N</td>
-              </tr>
-              <tr>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">Force Status</td>
-                <td className={`px-6 py-4 whitespace-nowrap text-sm ${isForceTooHigh() ? 'text-red-500 font-bold' : 'text-green-500'}`}>
-                  {isForceTooHigh() ? 'Exceeds Human Strength' : 'Within Human Strength'}
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+      <div>
+        <svg width="400" height="400">
+          <circle cx="200" cy="200" r="150" fill="lightblue" />
+          <g transform={`rotate(${rotation}, 200, 200)`}>
+            <rect x="197" y="50" width="6" height="150" fill={parseFloat(calculateCentripetalForce()) > humanStrength ? "red" : "white"} />
+          </g>
+          {flightStage !== 'landed' && (
+            <circle
+              cx={flightStage === 'attached' ? 200 + Math.sin(rotation * Math.PI / 180) * 150 : humanPosition.x}
+              cy={flightStage === 'attached' ? 200 - Math.cos(rotation * Math.PI / 180) * 150 : humanPosition.y}
+              r="10"
+              fill="blue"
+            />
+          )}
+        </svg>
+      </div>
+      <div>
+        <p>Force: {calculateCentripetalForce()} N</p>
+        <p>Human Strength: {humanStrength} N</p>
+        <p>Flight Stage: {flightStage}</p>
       </div>
     </div>
   );
-};
+}
 
-export default WindTurbine;
+export default App;
